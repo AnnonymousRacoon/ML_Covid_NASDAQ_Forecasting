@@ -10,6 +10,10 @@ This project investigates a variety of model architectures. Most do well at iden
  
 #### Dense Peformance
 
+ <img src = "https://github.com/AnnonymousRacoon/-Users-Ali-Documents-ML_Covid_NASDAQ_Forecasting/blob/main/LSTM_RES.png"><br>
+
+#### LSTM Peformance
+
 
 ### Validation Loss
 
