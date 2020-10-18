@@ -62,7 +62,7 @@ POLICY_DATA.set_index('date_announced',inplace = True)
 print(POLICY_DATA.head())
 print(COVID_DATA.describe())
 
-# print(POLICY_DATA['date_announced'].dt)
+
 
 def get_cases(date):
     try:
@@ -70,9 +70,11 @@ def get_cases(date):
     except:
         return COVID_DATA.loc[datetime(2020,10,3).strftime("%Y-%m-%d")]
 
+
+# add Covid deaths and cases
 APPENDAGE = TIMESTAMPS.apply(get_cases)
-# STOCK_DATA['Cases'] = APPENDAGE['cases']
-# STOCK_DATA['Deaths'] = APPENDAGE['deaths']
+STOCK_DATA['Cases'] = APPENDAGE['cases']
+STOCK_DATA['Deaths'] = APPENDAGE['deaths']
 
 
 def get_cell(date):
@@ -87,7 +89,7 @@ def get_cell(date):
        
         
 
-
+# append policy data
 APPENDAGE2 = TIMESTAMPS.apply(get_cell)
 for Col in ["entry_type", "correct_type", "update_type",  "update_level",  "init_country_level",   "compliance",'Border','Regulation','Lockdown','Curfew','Social Distancing']:
     STOCK_DATA[Col] = APPENDAGE2[Col]
@@ -99,12 +101,9 @@ for Col in ["entry_type", "correct_type", "update_type",  "update_level",  "init
 STOCK_DATA.fillna(0,inplace = True)
 STOCK_DATA.drop(columns = ['time'],inplace = True)
 
-print(POLICY_DATA.describe())
-
-print(STOCK_DATA.head())
 
 
-print(STOCK_DATA.describe())
+# show correlation
 correlation = STOCK_DATA.corr()
 Correlation_plot = px.imshow(correlation)
 Correlation_plot.show()
@@ -119,9 +118,8 @@ n = len(STOCK_DATA)
 train_df = STOCK_DATA[0:int(n*0.55)]
 val_df = STOCK_DATA[int(n*0.55):int(n*0.8)]
 test_df= STOCK_DATA[int(n*0.8):]
-
 num_features = STOCK_DATA.shape[1]
-print("NUM FEATURES: {}".format(num_features))
+
 
 # Normalise data
 
@@ -135,6 +133,8 @@ test_df = (test_df - train_mean) / train_std
 
 df_std = (STOCK_DATA - train_mean) / train_std
 df_std = df_std.melt(var_name='Column', value_name='Normalized')
+
+# visualise normalisation
 plt.figure(figsize=(12, 6))
 ax = sns.violinplot(x='Column', y='Normalized', data=df_std)
 _ = ax.set_xticklabels(STOCK_DATA.keys(), rotation=90)
@@ -429,38 +429,7 @@ class Sequential(tf.keras.Sequential):
     def load(self):
         self.load_weights(self.checkpoint_filepath)
 
-
-
-
-def compile_and_fit(model,window, patience=4,MAX_EPOCHS = 200,baseline = None):
-        early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss',
-                                                            patience=patience,
-                                                            mode='min',
-                                                            restore_best_weights = True,
-                                                            baseline = baseline)
-
-        model.compile(loss=tf.losses.MeanSquaredError(),
-                        optimizer=tf.optimizers.Adam(),
-                        metrics=[tf.metrics.MeanAbsoluteError()])
-
-        history = model.fit(window.train, epochs=MAX_EPOCHS,
-                            validation_data=window.val,
-                            callbacks=[early_stopping])
-        return history
-
-
-# ___________________________________________________________
-# ___________________________________________________________
-# EXECTUTION (SINGLE STEP)
-# -----------------------------------------------------------
-# -----------------------------------------------------------
-
-
-    
-    
-
-
-
+# evaluator class
 class Evaluator():
     def __init__(self):
         self.validation_performance = {}
@@ -490,7 +459,7 @@ class Evaluator():
         for name, value in self.test_performance.items():
             print(f'{name:12s}: {value[1]:0.4f}')
 
-
+# feedback model
 class FeedBack(tf.keras.Model):
     def __init__(self, units, out_steps):
         super().__init__()
@@ -537,6 +506,7 @@ class FeedBack(tf.keras.Model):
         predictions = tf.transpose(predictions, [1, 0, 2])
         return predictions
 
+# residual wrapper
 class ResidualWrapper(tf.keras.Model):
     def __init__(self, model,ID = 'RESNET'):
         super().__init__()
@@ -585,6 +555,37 @@ class ResidualWrapper(tf.keras.Model):
 
 
 
+# compile and fit method
+def compile_and_fit(model,window, patience=4,MAX_EPOCHS = 200,baseline = None):
+        early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss',
+                                                            patience=patience,
+                                                            mode='min',
+                                                            restore_best_weights = True,
+                                                            baseline = baseline)
+
+        model.compile(loss=tf.losses.MeanSquaredError(),
+                        optimizer=tf.optimizers.Adam(),
+                        metrics=[tf.metrics.MeanAbsoluteError()])
+
+        history = model.fit(window.train, epochs=MAX_EPOCHS,
+                            validation_data=window.val,
+                            callbacks=[early_stopping])
+        return history
+
+
+# ___________________________________________________________
+# ___________________________________________________________
+# EXECTUTION (SINGLE STEP)
+# -----------------------------------------------------------
+# -----------------------------------------------------------
+
+
+    
+    
+
+
+
+
 lstm_model = Sequential([
         # Shape [batch, time, features] => [batch, time, lstm_units]
         tf.keras.layers.LSTM(32, return_sequences=True,dropout=0.2),
@@ -594,146 +595,6 @@ lstm_model = Sequential([
 
 
 history = lstm_model.compile_and_fit( wide_window,MAX_EPOCHS=1)
-
-
-single = False
-
-if single:
-
-    SS_Evaluator = Evaluator()
-
-    #////////////////////////#
-    #         Baseline       #
-    #////////////////////////#
-
-
-    baseline = Baseline(label_index=column_indices[plot_col],ID = 'Baseline')
-
-    baseline.compile(loss=tf.losses.MeanSquaredError(),
-                    metrics=[tf.metrics.MeanAbsoluteError()])
-
-    SS_Evaluator.evaluate(baseline,single_step_window,'Baseline')
-
-
-
-    #////////////////////////#
-    #         linear         #
-    #////////////////////////#
-
-    linear = Sequential([
-        tf.keras.layers.Dense(units=1)
-    ])
-
-
-    history = linear.compile_and_fit( single_step_window)
-
-    linear.load()
-
-    SS_Evaluator.evaluate(linear,single_step_window,'Linear')
-
-
-
-
-    # #////////////////////////#
-    # #         multidense     #
-    # #////////////////////////#
-
-    # dense = Sequential([
-    #     tf.keras.layers.Dense(units=64, activation='relu'),
-    #     tf.keras.layers.Dense(units=64, activation='relu'),
-    #     tf.keras.layers.Dense(units=1)
-    # ])
-
-    # history = dense.compile_and_fit( single_step_window)
-
-    # SS_Evaluator.evaluate(dense,single_step_window,'Dense')
-
-
-    #////////////////////////#
-    #          RNN           #
-    #////////////////////////#
-
-
-
-    lstm_model = Sequential([
-        # Shape [batch, time, features] => [batch, time, lstm_units]
-        tf.keras.layers.LSTM(32, return_sequences=True,dropout=0.2),
-        # Shape => [batch, time, features]
-        tf.keras.layers.Dense(units=1)
-    ],ID='LSTM')
-
-
-    history = lstm_model.compile_and_fit( wide_window,MAX_EPOCHS=10)
-
-    lstm_model.load()
-
-    IPython.display.clear_output()
-    SS_Evaluator.evaluate(lstm_model,wide_window,'LSTM')
-
-
-
-
-
-
-    # ///////////////////
-    # conv
-    # //////////////////
-
-
-
-
-
-    conv_model = Sequential([
-        tf.keras.layers.Conv1D(filters=32,
-                            kernel_size=(CONV_WIDTH,),
-                            activation='relu'),
-        tf.keras.layers.Dense(units=32, activation='relu'),
-        tf.keras.layers.Dense(units=1),
-    ],ID = 'Conv')
-
-
-
-
-    history = conv_model.compile_and_fit(conv_window)
-    conv_model.load()
-
-    IPython.display.clear_output()
-    SS_Evaluator.evaluate(conv_model,conv_window,"CNN")
-
-
-    conv_window.plot(conv_model)
-
-
-
-    # ///////////////////
-    # residual RNN
-    # //////////////////
-
-
-
-
-    residual_lstm = ResidualWrapper(
-        Sequential([
-        tf.keras.layers.LSTM(32, return_sequences=True,dropout=0.2),
-        tf.keras.layers.Dense(
-            num_features,
-            # The predicted deltas should start small
-            # So initialize the output layer with zeros
-            kernel_initializer=tf.initializers.zeros)
-    ],ID = 'RES'))
-
-    history = compile_and_fit(residual_lstm, wide_window)
-
-    IPython.display.clear_output()
-    SS_Evaluator.evaluate(residual_lstm,wide_window,"RES LSTM")
-
-
-    # //////////////
-    # PERFORMANCE
-    #///////////////
-
-    SS_Evaluator.performance(lstm_model)
-
 
 
 
@@ -786,6 +647,9 @@ multi_window.plot(last_baseline)
 # multi_window.plot(multi_linear_model_basic)
 
 
+# //////////////
+# DENSE
+#///////////////
 
 multi_linear_model = Sequential([
     # Take the last time-step.
@@ -804,6 +668,10 @@ IPython.display.clear_output()
 MS_Evaluator.evaluate(multi_linear_model,multi_window,'DENSE')
 
 multi_window.plot(multi_linear_model)
+
+# //////////////
+# DENSE_16
+#///////////////
 
 multi_linear_model5 = Sequential([
     # Take the last time step.
@@ -975,6 +843,11 @@ multi_window.plot(multi_linear_model5)
 # multi_window.plot(multi_conv_model_res)
 
 
+# ___________________________________________________________
+# ___________________________________________________________
+# MULTI (feedback)
+# -----------------------------------------------------------
+# -----------------------------------------------------------
 
 
 # //////////////
